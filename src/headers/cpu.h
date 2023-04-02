@@ -180,6 +180,53 @@ typedef struct REGISTER_STRUCT {
     };
 }reg_t;
 
+
+/*======================================*/
+/*      cpu flags                       */
+/*======================================*/
+
+// condition code flags of most recent (latest) operation
+// condition codes will only be set by the following integer arithmetic instructions
+
+/* integer arithmetic instructions
+    inc     increment 1
+    dec     decrement 1
+    neg     negate
+    not     complement
+    ----------------------------
+    add     add
+    sub     subtract
+    mul    multiply
+    xor     exclusive or
+    or      or
+    and     and
+    ----------------------------
+    sal     left shift
+    shl     left shift (same as sal)
+    sar     arithmetic right shift
+    shr     logical right shift
+*/
+    
+/* comparison and test instructions
+    cmp     compare
+    test    test
+*/
+typedef union CPU_FLAGS_VALUE
+{
+    uint32_t __cpu_flags_value;
+    struct
+    {
+        // carry flag: detect overflow for unsigned operations
+        uint8_t CF;
+        // zero flag: result is zero
+        uint8_t ZF;
+        // sign flag: result is negative: highest bit
+        uint8_t SF;
+        // overflow flag: detect overflow for signed operations
+        uint8_t OF;
+    };
+}cpu_flag_t;
+
 /*======================================*/
 /*      cpu core                        */
 /*======================================*/
@@ -193,41 +240,8 @@ typedef struct CORE_STRUCT
         uint32_t eip;
     };
     
-    // condition code flags of most recent (latest) operation
-    // condition codes will only be set by the following integer arithmetic instructions
-
-    /* integer arithmetic instructions
-        inc     increment 1
-        dec     decrement 1
-        neg     negate
-        not     complement
-        ----------------------------
-        add     add
-        sub     subtract
-        mul    multiply
-        xor     exclusive or
-        or      or
-        and     and
-        ----------------------------
-        sal     left shift
-        shl     left shift (same as sal)
-        sar     arithmetic right shift
-        shr     logical right shift
-    */
-    
-    /* comparison and test instructions
-        cmp     compare
-        test    test
-    */
-
-    // carry flag: detect overflow for unsigned operations
-    uint32_t CF;
-    // zero flag: result is zero
-    uint32_t ZF;
-    // sign flag: result is negative: highest bit
-    uint32_t SF;
-    // overflow flag: detect overflow for signed operations
-    uint32_t OF;
+    // cpu flags
+    cpu_flag_t flags;
 
     // register files
     reg_t       reg;
