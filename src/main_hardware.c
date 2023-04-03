@@ -23,11 +23,12 @@ static void TestString2Uint();
 void print_register(core_t *cr);
 void print_stack(core_t *cr);
 
+void TestParsingInstruction();
 void TestParsingOperand();
 
 int main()
 {
-    TestParsingOperand();
+    TestParsingInstruction();
     return 0;
 }
 
