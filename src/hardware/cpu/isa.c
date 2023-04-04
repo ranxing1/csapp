@@ -137,6 +137,7 @@ static uint64_t decode_operand(od_t *od)
     // empty
     return 0;
 }
+
 // lookup table
 static const char *reg_name_list[72] = {
     "%rax","%eax","%ax","%ah","%al",
@@ -212,44 +213,35 @@ static void parse_instruction(const char *str, inst_t *inst, core_t *cr)
         // |   |op|    |src| | , | dst|
         // | 0 | 1|  2 | 3 | | 4 |  5 |
         // state transition
-        if (c == '(' || c == ')')
-        {
-            count_parentheses ++;
-        }
-
-        if (state == 0 && c != ' ' && c != '\t')
+        if (state == 0 && c != ' ')
         {
             state = 1;
         }
-        else if (state == 1 && (c == ' ' || c == '\t'))
+        else if (state == 1 && c == ' ')
         {
             state = 2;
             continue;
         }
-        else if (state == 2 && c != ' ' && c != '\t')
+        else if (state == 2 && c != ' ')
         {
             state = 3;
         }
-        else if (state == 3 && (c == ',' || c == ' ' || c == '\t') && (count_parentheses == 0 || count_parentheses == 2))
+        else if (state == 3 && c == ',' && (count_parentheses == 0 || count_parentheses == 2))
         {
+            
             state = 4;
             continue;
         }
-        else if (state == 4 && c != ' ' && c != ',' && c != '\t')
+        else if (state == 4 && c != ' ' && c != ',')
         {
             state = 5;
         }
-        else if (state == 5 && (c == ' ' || c == '\0' || c == '\n'))
+        else if (state == 5 && c == ' ')
         {
             state = 6;
             continue;
         }
-        else if(state == 6)
-        {
-            break;
-        }
 
-        // add a char to the str when state matches
         if (state == 1)
         {
             op_str[op_len++] = c;
@@ -359,153 +351,118 @@ static void parse_operand(const char *str, od_t *od, core_t *cr)
         od->type = MEM_IMM;
         char imm[64] = {'\0'};
         uint8_t imm_len = 0;
-        char reg1[64] = {'\0'};
+        char reg1[8] = {'\0'};
         uint8_t reg1_len = 0;
-        char reg2[64] = {'\0'};
+        char reg2[8] = {'\0'};
         uint8_t reg2_len = 0;
-        char scal[64] = {'\0'};
+        char scal[2] = {'\0'};
         uint8_t scal_len = 0;
 
-        uint8_t ca = 0; // ()
-        uint8_t cb = 0; // ,
+        uint8_t count_parentheses = 0;
+        uint8_t count_comma = 0;
 
         for(int i = 0;i < str_len; ++i)
         {
             char c = str[i];
             if(c == '(' || c == ')')
             {
-                ca++;
+                count_parentheses++;
                 continue;
             }
             else if(c == ',')
             {
-                cb++;
+                count_comma++;
                 continue;
             }
             // parse imm(reg1,reg2,scal)
             else
             {
-                if(ca == 0)
+                if(count_parentheses == 0)
                 {
                     // xxx
-                    imm[imm_len] = c;
-                    imm_len++;
-                    continue;
+                    imm[imm_len++] = c;
                 }
-                else if(ca == 1)
+                else if(count_parentheses == 1)
                 {
-                    if(cb == 0)
+                    if(count_comma == 0)
                     {
                         // ???(xxx
-                        reg1[reg1_len] = c;
-                        reg1_len++;
-                        continue;
+                        reg1[reg1_len++] = c;
                     }
-                    else if(cb == 1)
+                    else if(count_comma == 1)
                     {
                         // ???(???,xxx
-                        reg2[reg2_len] = c;
-                        reg2_len++;
-                        continue;
+                        reg2[reg2_len++] = c;
                     }
-                    else if(cb == 2)
+                    else if(count_comma == 2)
                     {
                         // ???(???,???,xxx
-                        scal[scal_len] = c;
-                        scal_len++;
+                        scal[scal_len++] = c;
                     }  
                 }  
             }
         }
-        // imm, reg1, reg2, scal
+        // parse imm
         if (imm_len > 0)
         {
             od->imm = string2uint(imm);
-            if (ca == 0)
+            if (count_parentheses == 0)
             {
                 // imm
                 od->type = MEM_IMM;
                 return;
             }
         }
-
+        // parse scale
         if (scal_len > 0)
         {
-            od->scal = string2uint(scal);
-            if (od->scal != 1 && od->scal != 2 && od->scal != 4  && od->scal != 8)
+            od->imm = string2uint(scal);
+            if (od->scal != 1 && od->scal != 2 && od->scal != 4 && od->scal != 8)
             {
-                printf("%s is not a legal scaler\n", scal);
+                debug_printf(DEBUG_PARSEINST, "parse operand %s\n    scale number %s must be 1,2,4,8\n", scal);
                 exit(0);
             }
         }
+        // parse reg1
         if (reg1_len > 0)
         {
             od->reg1 = reflect_register(reg1, cr);
         }
-
+        // parse reg2
         if (reg2_len > 0)
         {
             od->reg2 = reflect_register(reg2, cr);
         }
 
-        // set operand type
-        if (cb == 0)
+        // set types
+        if (count_comma == 0)
         {
-            if (imm_len > 0)
-            {
-                od->type = MEM_IMM_REG1;
-                return;
-            }
-            else 
-            {
-                od->type = MEM_REG1;
-                return;
-            }
+            // (r)
+            od->type = MEM_REG1;
         }
-        else if (cb == 1)
+        else if (count_comma == 1)
         {
-            if (imm_len > 0)
-            {
-                od->type = MEM_IMM_REG1_REG2;
-                return;
-            }
-            else 
-            {
-                od->type = MEM_REG1_REG2;
-                return;
-            }
+            // (r,r)
+            od->type = MEM_REG1_REG2;
         }
-        else if (cb == 2)
+        else if (count_comma == 2)
         {
-            if (reg1_len > 0)
+            if (reg1_len == 0)
             {
-                // reg1 exists
-                if (imm_len > 0)
-                {
-                    od->type = MEM_IMM_REG1_REG2_SCAL;
-                    return;
-                }
-                else 
-                {
-                    od->type = MEM_REG1_REG2_SCAL;
-                    return;
-                }
+                // (,r,s)
+                od->type = MEM_REG2_SCAL;
             }
             else
             {
-                // no reg1
-                if (imm_len > 0)
-                {
-                    od->type = MEM_IMM_REG2_SCAL;
-                    return;
-                }
-                else 
-                {
-                    od->type = MEM_REG2_SCAL;
-                    return;
-                }
-            }            
+                // (r,r,s)
+                od->type = MEM_REG1_REG2_SCAL;
+            }
         }
+        // bias 1 for MEM_IMM_[.*]
+        if (imm_len > 0){
+            od->type ++;
+        }
+            
     }
 }
 
@@ -553,7 +510,7 @@ static handler_t handler_table[NUM_INSTRTYPE] = {
 // inline to reduce cost
 static inline void reset_cflags(core_t *cr)
 {
-    cr->flags.__cpu_flags_value = 0;
+    cr->flags.__cpu_flag_value = 0;
 }
 
 // update the rip pointer to the next instruction sequentially
@@ -572,7 +529,7 @@ static void mov_handler(od_t *src_od, od_t *dst_od, core_t *cr)
 {
     uint64_t src = decode_operand(src_od);
     uint64_t dst = decode_operand(dst_od);
-
+    
     if (src_od->type == REG && dst_od->type == REG)
     {
         // src: register
@@ -711,7 +668,14 @@ static void add_handler(od_t *src_od, od_t *dst_od, core_t *cr)
         // dst: register (value: int64_t bit map)
         uint64_t val = *(uint64_t *)dst + *(uint64_t *)src;
 
+        int val_sign = ((val >> 63) & 0x1);
+        int src_sign = ((*(uint64_t *)src >> 63) & 0x1);
+        int dst_sign = ((*(uint64_t *)dst >> 63) & 0x1);
         // set condition flags
+        cr->flags.CF = (val < *(uint64_t *)src); // unsigned
+        cr->flags.ZF = (val == 0);
+        cr->flags.SF = val_sign;
+        cr->flags.OF = (src_sign == 0 && dst_sign == 0 && val_sign == 1) || (src_sign == 1 && dst_sign == 1 && val_sign == 0);
 
         // update registers
         *(uint64_t *)dst = val;
@@ -724,6 +688,30 @@ static void add_handler(od_t *src_od, od_t *dst_od, core_t *cr)
 
 static void sub_handler(od_t *src_od, od_t *dst_od, core_t *cr)
 {
+    uint64_t src = decode_operand(src_od);
+    uint64_t dst = decode_operand(dst_od);
+
+    if (src_od->type == IMM && dst_od->type == REG)
+    {
+        // src: register (value: int64_t bit map)
+        // dst: register (value: int64_t bit map)
+        // dst = dst - src
+        uint64_t val = *(uint64_t *)dst + (~src + 1);
+
+        // set condition flags
+        cr->flags.CF = 0; // unsigned
+        cr->flags.ZF = (val == 0);
+        cr->flags.SF = ((val >> 63) & 0x1);
+        cr->flags.OF = 0; // singed
+
+        // update registers
+        *(uint64_t *)dst = val;
+        // signed and unsigned value follow the same addition. e.g.
+        // 5 = 0000000000000101, 3 = 0000000000000011, -3 = 1111111111111101, 5 + (-3) = 0000000000000010
+        next_rip(cr);
+        return;
+    }
+    
 }
 
 static void cmp_handler(od_t *src_od, od_t *dst_od, core_t *cr)
@@ -743,7 +731,9 @@ static void jmp_handler(od_t *src_od, od_t *dst_od, core_t *cr)
 void instruction_cycle(core_t *cr)
 {
     // FETCH: get the instruction string by program counter
-    const char *inst_str = (const char *)cr->rip;
+    char inst_str[MAX_INSTRUCTION_CHAR + 10];
+    readinst_dram(va2pa(cr->rip, cr), inst_str, cr);
+
     debug_printf(DEBUG_INSTRUCTIONCYCLE, "%lx    %s\n", cr->rip, inst_str);
 
     // DECODE: decode the run-time instruction operands

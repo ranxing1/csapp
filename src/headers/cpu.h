@@ -213,17 +213,17 @@ typedef struct REGISTER_STRUCT {
 */
 typedef union CPU_FLAGS_VALUE
 {
-    uint32_t __cpu_flags_value;
+    uint64_t __cpu_flag_value;
     struct
     {
         // carry flag: detect overflow for unsigned operations
-        uint8_t CF;
+        uint16_t CF;
         // zero flag: result is zero
-        uint8_t ZF;
+        uint16_t ZF;
         // sign flag: result is negative: highest bit
-        uint8_t SF;
+        uint16_t SF;
         // overflow flag: detect overflow for signed operations
-        uint8_t OF;
+        uint16_t OF;
     };
 }cpu_flag_t;
 
