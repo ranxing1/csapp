@@ -618,6 +618,18 @@ static void pop_handler(od_t *src_od, od_t *dst_od, core_t *cr)
 
 static void leave_handler(od_t *src_od, od_t *dst_od, core_t *cr)
 {
+    // movq %rbp, %rsp
+    (cr->reg).rsp = (cr->reg).rbp;
+
+    // popq %rbp
+    uint64_t old_val = read64bits_dram(
+        va2pa((cr->reg).rsp, cr),
+        cr
+        );
+    (cr->reg).rsp = (cr->reg).rsp + 8;
+    (cr->reg).rbp = old_val;
+    next_rip(cr);
+    cr->flags.__cpu_flag_value = 0;
 }
 
 static void call_handler(od_t *src_od, od_t *dst_od, core_t *cr)
@@ -693,7 +705,7 @@ static void sub_handler(od_t *src_od, od_t *dst_od, core_t *cr)
 
     if (src_od->type == IMM && dst_od->type == REG)
     {
-        // src: register (value: int64_t bit map)
+        // src: imm (value: int64_t bit map)
         // dst: register (value: int64_t bit map)
         // dst = dst - src
         uint64_t val = *(uint64_t *)dst + (~src + 1);
@@ -716,14 +728,56 @@ static void sub_handler(od_t *src_od, od_t *dst_od, core_t *cr)
 
 static void cmp_handler(od_t *src_od, od_t *dst_od, core_t *cr)
 {
+    uint64_t src = decode_operand(src_od);
+    uint64_t dst = decode_operand(dst_od);
+    if (src_od->type == IMM && dst_od->type >= MEM_IMM)
+    {
+        // src: imm (value: int64_t bit map)
+        // dst: mem (value: int64_t bit map)
+        uint64_t dval = read64bits_dram(va2pa(dst, cr), cr);
+        uint64_t val = dval + (~src + 1);
+
+        int val_sign = ((val >> 63) & 0x1);
+        int src_sign = ((src >> 63) & 0x1);
+        int dst_sign = ((dval >> 63) & 0x1);
+
+        // set condition flags
+        cr->flags.CF = (val > dval); // unsigned
+
+        cr->flags.ZF = (val == 0);
+        cr->flags.SF = val_sign;
+        
+        cr->flags.OF = (src_sign == 1 && dst_sign == 0 && val_sign == 1) || (src_sign == 0 && dst_sign == 1 && val_sign == 0);
+
+        // signed and unsigned value follow the same addition. e.g.
+        // 5 = 0000000000000101, 3 = 0000000000000011, -3 = 1111111111111101, 5 + (-3) = 0000000000000010
+        next_rip(cr);
+        return;
+    }
 }
 
 static void jne_handler(od_t *src_od, od_t *dst_od, core_t *cr)
 {
+    uint64_t src = decode_operand(src_od);
+
+    if(cr->flags.ZF == 0)
+    {
+        cr->rip = src;
+    }
+    else 
+    {
+        next_rip(cr);
+    }
+
+    
+    cr->flags.__cpu_flag_value = 0;
 }
 
 static void jmp_handler(od_t *src_od, od_t *dst_od, core_t *cr)
 {
+    uint64_t src = decode_operand(src_od);
+    cr->rip = src;
+    cr->flags.__cpu_flag_value = 0;
 }
 
 // instruction cycle is implemented in CPU
