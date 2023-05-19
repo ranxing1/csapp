@@ -19,6 +19,10 @@ MAIN_HARDWARE = $(SRC_DIR)/main_hardware.c
 hardware:
 	cc $(CFLAGS) -I$(SRC_DIR) $(COMMON) $(CPU) $(MEMORY) $(DISK) $(MAIN_HARDWARE) -o $(EXE_HARDWARE)
 	./$(EXE_HARDWARE)
+.PHONY:link
+link:
+	cc $(CFLAGS) -I$(SRC_DIR) $(COMMON) $(SRC_DIR)/tests/test_elf.c $(SRC_DIR)/linker/parseElf.c -o ./bin/test_elf
+	./bin/test_elf
 
 clean:
 	rm -f *.o *~ $(EXE_HARDWARE)
